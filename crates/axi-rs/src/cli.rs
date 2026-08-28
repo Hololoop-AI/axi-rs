@@ -38,6 +38,27 @@ pub struct Outcome {
     pub code: i32,
 }
 
+impl Outcome {
+    /// A successful outcome: `stdout` only, empty stderr, exit 0.
+    fn ok(stdout: String) -> Self {
+        Outcome {
+            stdout,
+            stderr: String::new(),
+            code: 0,
+        }
+    }
+
+    /// A failed outcome: the structured error TOON-encoded to stderr, exit
+    /// mapped from the error's class.
+    fn err(err: AxiError) -> Self {
+        Outcome {
+            stdout: String::new(),
+            stderr: toon::encode(&err.to_value()),
+            code: exit_code_for(&err),
+        }
+    }
+}
+
 /// One agent-facing CLI built on the AXI protocol.
 pub struct App {
     pub name: String,
@@ -103,42 +124,18 @@ impl App {
     /// Compute the [`Outcome`] for an invocation without touching stdout/stderr.
     pub fn execute(&self, argv: &[String]) -> Outcome {
         match self.parse(argv) {
-            Dispatch::Version => Outcome {
-                stdout: format!("{} {}", self.name, self.version),
-                stderr: String::new(),
-                code: 0,
-            },
-            Dispatch::Help => Outcome {
-                stdout: self.help_text(),
-                stderr: String::new(),
-                code: 0,
-            },
-            Dispatch::Home => Outcome {
-                stdout: encode_value(&(self.home)()),
-                stderr: String::new(),
-                code: 0,
-            },
+            Dispatch::Version => Outcome::ok(format!("{} {}", self.name, self.version)),
+            Dispatch::Help => Outcome::ok(self.help_text()),
+            Dispatch::Home => Outcome::ok(encode_value(&(self.home)())),
             Dispatch::Command(name, rest) => match self.lookup(name) {
                 Some(cmd) => match (cmd.handler)(&rest) {
-                    Ok(value) => Outcome {
-                        stdout: encode_value(&value),
-                        stderr: String::new(),
-                        code: 0,
-                    },
-                    Err(err) => Outcome {
-                        stdout: String::new(),
-                        stderr: toon::encode(&err.to_value()),
-                        code: exit_code_for(&err),
-                    },
+                    Ok(value) => Outcome::ok(encode_value(&value)),
+                    Err(err) => Outcome::err(err),
                 },
                 None => {
                     let err = AxiError::not_found(format!("Unknown command: {name}"))
                         .suggest(format!("Run `{} --help` for available commands", self.name));
-                    Outcome {
-                        stdout: String::new(),
-                        stderr: toon::encode(&err.to_value()),
-                        code: exit_code_for(&err),
-                    }
+                    Outcome::err(err)
                 }
             },
         }

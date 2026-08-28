@@ -215,7 +215,7 @@ fn number_to_toon(n: &Number) -> String {
     }
     match n.as_f64() {
         Some(f) if f == 0.0 => "0".to_string(),
-        Some(f) => format!("{}", f),
+        Some(f) => f.to_string(),
         // A Number that is neither an integer nor representable as f64 should not
         // occur through serde_json; fall back to its own rendering.
         None => n.to_string(),

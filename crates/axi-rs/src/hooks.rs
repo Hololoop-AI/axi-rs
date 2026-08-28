@@ -99,15 +99,9 @@ fn install_claude(home: &Path, outcome: &mut Outcome) -> Result<(), AxiError> {
 
     // Merge our managed SessionStart hook, preserving any existing (unmanaged)
     // hooks. A malformed existing file is treated as unmanaged and not clobbered.
-    let mut root = match read_optional(&path)? {
-        Some(text) => match serde_json::from_str::<Value>(&text) {
-            Ok(value) => value,
-            Err(_) => {
-                outcome.skipped.push(path);
-                return Ok(());
-            }
-        },
-        None => json!({}),
+    let mut root = match read_json_or_skip(&path, outcome)? {
+        Some(root) => root,
+        None => return Ok(()),
     };
 
     let object = root.as_object_mut().ok_or_else(|| {
@@ -162,15 +156,9 @@ fn install_codex(home: &Path, outcome: &mut Outcome) -> Result<(), AxiError> {
 }
 
 fn install_codex_hooks(path: &Path, outcome: &mut Outcome) -> Result<(), AxiError> {
-    let mut root = match read_optional(path)? {
-        Some(text) => match serde_json::from_str::<Value>(&text) {
-            Ok(value) => value,
-            Err(_) => {
-                outcome.skipped.push(path.to_path_buf());
-                return Ok(());
-            }
-        },
-        None => json!({}),
+    let mut root = match read_json_or_skip(path, outcome)? {
+        Some(root) => root,
+        None => return Ok(()),
     };
 
     let object = root
@@ -263,6 +251,22 @@ fn read_optional(path: &Path) -> Result<Option<String>, AxiError> {
     std::fs::read_to_string(path)
         .map(Some)
         .map_err(|e| AxiError::server(format!("Failed to read {}: {e}", path.display())))
+}
+
+/// Read `path` as JSON, defaulting to `{}` when absent. A malformed existing
+/// file is treated as an unmanaged file we must not clobber: it is recorded in
+/// `outcome.skipped` and `Ok(None)` is returned so the caller can bail out.
+fn read_json_or_skip(path: &Path, outcome: &mut Outcome) -> Result<Option<Value>, AxiError> {
+    match read_optional(path)? {
+        Some(text) => match serde_json::from_str::<Value>(&text) {
+            Ok(value) => Ok(Some(value)),
+            Err(_) => {
+                outcome.skipped.push(path.to_path_buf());
+                Ok(None)
+            }
+        },
+        None => Ok(Some(json!({}))),
+    }
 }
 
 /// Whether an existing file's content carries [`MARKER`] (i.e. is managed by us).
