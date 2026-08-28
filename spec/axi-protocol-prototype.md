@@ -72,16 +72,19 @@ Dispatch exists (`src/cli.rs`). Add help; keep the ambient/home payload slim.
 home output at session start. We own it: never implicit, auditable, marker-managed.
 
 - Runs only on explicit `setup hooks`.
-- Writes managed entries to (prototype target set — confirm on the surface):
-  Claude Code `~/.claude/settings.json` and Codex `~/.codex/hooks.json` +
-  `config.toml`. OpenCode plugin: deferred unless flagged.
+- Writes managed entries to all three harnesses (driver pulled OpenCode into
+  this batch): Claude Code `~/.claude/settings.json`, Codex `~/.codex/hooks.json`
+  + `config.toml`, and the OpenCode plugin under
+  `~/.config/opencode/plugins/axi-<marker>.js`.
 - Marker-managed + idempotent: only touches its own entries; refuses to
   overwrite an unmanaged file; a second run is a no-op; a stale path is repaired.
 
 ### Test contract (against a temp `$HOME`)
 
 - `setup hooks` on a clean temp HOME creates `~/.claude/settings.json` with one
-  managed `SessionStart` command hook running this binary; exit 0.
+  managed `SessionStart` command hook running this binary; writes the Codex
+  `hooks.json` + `config.toml` entries; and writes the OpenCode plugin file under
+  `~/.config/opencode/plugins/`; exit 0.
 - second `setup hooks` run is a no-op (no diff, exit 0).
 - an existing `settings.json` with unmanaged hooks is preserved (managed entry
   added alongside, unmanaged untouched).
@@ -94,8 +97,9 @@ home output at session start. We own it: never implicit, auditable, marker-manag
 - Prototype pace: build A+B+C as one batch, one build session, full `cargo test`
   green gate. Surface backend (axum) is the next milestone, separate spec.
 - `preserve_order` on `serde_json` is a required Cargo change for A.
-- OpenCode hook target and the deferred TOON forms are open — flag on the surface
-  if they should be in-scope now.
+- Approved on the Review Surface (2026-08-28): build A+B+C as one batch; OpenCode
+  hook target pulled in; advanced TOON forms (nested tabular columns,
+  keyed-tabular-root, tab/pipe delimiters) stay deferred.
 
 ## Tests
 
