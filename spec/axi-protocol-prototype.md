@@ -103,4 +103,37 @@ home output at session start. We own it: never implicit, auditable, marker-manag
 
 ## Tests
 
-_(pending test-writer — this spec's contract is the source)_
+Locked integration tests (test-writer). Build implements against these and must
+not modify them.
+
+**A. TOON encoding** — `crates/axi-rs/tests/toon_conformance.rs`
+- § `"toon_encodes_spec_v41_fixture_table"` — data-driven over all 12 rows of § A
+  "Test contract — fixtures"; asserts each input JSON → expected TOON verbatim
+  (encounter order, empty-array `key: []`, inline-dash list form, number
+  canonicalization, tightened quoting).
+
+**B. CLI dispatch + slim help** — `crates/axi-rs/tests/cli_dispatch.rs`
+- § `"when_no_args_then_prints_home_as_toon_on_stdout_exit_0"` — covers § B "no-args → home() as TOON, exit 0".
+- § `"when_version_flag_then_prints_name_and_version_exit_0_and_runs_no_command"` — covers § B "--version".
+- § `"when_help_flag_then_prints_slim_index_with_command_summaries_and_no_ambient_blob"` — covers § B "--help slim index; fat blob absent".
+- § `"when_registered_command_runs_then_round_trips_args_to_toon_stdout_exit_0"` — covers § B "echo round-trip".
+- § `"when_unknown_command_then_exit_3_and_stderr_is_toon_not_found_error_with_suggestion"` — covers § B "unknown command → NOT_FOUND, exit 3".
+
+**C. Hook installer** — `crates/axi-rs/tests/hook_installer.rs`
+- § `"when_installing_on_clean_home_then_writes_all_three_harnesses_and_succeeds"` — covers § C clean-install (Claude/Codex/OpenCode).
+- § `"when_installing_twice_then_second_run_is_a_no_op_with_no_diff"` — covers § C idempotent second run.
+- § `"when_settings_json_has_unmanaged_hooks_then_they_are_preserved_alongside_managed"` — covers § C unmanaged-hooks preserved.
+- § `"when_target_file_exists_without_marker_then_it_is_reported_not_overwritten"` — covers § C refuse-to-clobber (reported, not overwritten).
+- § `"when_installing_then_it_writes_only_within_its_three_managed_subtrees"` — covers § C "no other/implicit writes to $HOME" (enforced as scoped-writes).
+
+### Seams build must implement
+- `App::execute(&[String]) -> Outcome { stdout: String, stderr: String, code: i32 }`
+  (public fields); `run()` becomes a thin printer over it.
+- `App::command(name, summary, handler)` — commands carry a one-line summary for
+  the slim `--help` index.
+- `serde_json` `preserve_order` feature enabled on the crate dependency (encounter
+  order + tabular column order depend on it).
+- `axi::hooks` module: `pub const MARKER: &str`; `pub fn install(home: &Path) ->
+  Result<Outcome, AxiError>` with `Outcome { written: Vec<PathBuf>, skipped:
+  Vec<PathBuf> }`; content-marker-based managed-ness; OpenCode plugin written to
+  `~/.config/opencode/plugins/axi-<MARKER>.js`.
