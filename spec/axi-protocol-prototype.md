@@ -1,5 +1,5 @@
 # axi-rs protocol crate — prototype
-status: in-progress
+status: built
 
 One prototype milestone (not story-by-story): a working AXI protocol crate —
 TOON output conformant to SPEC v4.1, command-first dispatch with a slim help,
@@ -125,6 +125,13 @@ not modify them.
 - § `"when_settings_json_has_unmanaged_hooks_then_they_are_preserved_alongside_managed"` — covers § C unmanaged-hooks preserved.
 - § `"when_target_file_exists_without_marker_then_it_is_reported_not_overwritten"` — covers § C refuse-to-clobber (reported, not overwritten).
 - § `"when_installing_then_it_writes_only_within_its_three_managed_subtrees"` — covers § C "no other/implicit writes to $HOME" (enforced as scoped-writes).
+
+## Changes
+- 2026-08-28 — built A+B+C as one batch; all locked integration tests green
+  (TOON conformance, CLI dispatch/slim help, hook installer). Enabled
+  `serde_json` `preserve_order`; added `App::execute`/`Outcome` seam + 3-arg
+  `command`; new `axi::hooks` module with `MARKER`, `install`, and the wired
+  `setup hooks` command. Full suite: 30 tests green.
 
 ### Seams build must implement
 - `App::execute(&[String]) -> Outcome { stdout: String, stderr: String, code: i32 }`

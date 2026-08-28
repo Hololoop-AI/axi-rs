@@ -6,17 +6,21 @@
 //! (cadre-context decisions/2026-08-29-axi-rs-design-calls: TOON everywhere, no
 //! output fallback, but keeping the internal model is not a fallback).
 //!
-//! Covered here: objects, nested objects, uniform-object arrays folded into a
-//! tabular block, scalar arrays inline, and a list fallback for mixed/nested
-//! arrays.
+//! Conformance target: SPEC v4.1. Covered here — encounter-order keys (requires
+//! `serde_json`'s `preserve_order` feature), nested objects, uniform-object
+//! arrays folded into a tabular block, scalar arrays inline, the inline-dash list
+//! form for mixed/nested arrays, canonical numbers, and the tightened quoting
+//! rules.
 //!
-//! TODO(spec-conformance): this is the core TOON shape, not yet checked line for
-//! line against SPEC.md v4.1. The quoting rules and the mixed-array list form in
-//! particular need a conformance pass before we depend on byte-exact output.
+//! Deferred (SPEC v4.1 features not built for the prototype): nested-object
+//! tabular columns (`{id,customer{name,country}}`), keyed-tabular-root, and
+//! tab/pipe delimiters. The active delimiter here is always the comma.
 
-use serde_json::Value;
+use serde_json::{Number, Value};
 
 const INDENT: &str = "  ";
+/// The active field delimiter. Fixed to comma for the prototype.
+const DELIMITER: char = ',';
 
 /// Encode a JSON value as a TOON document (no trailing newline).
 pub fn encode(value: &Value) -> String {
@@ -43,6 +47,10 @@ fn emit_object(map: &serde_json::Map<String, Value>, indent: usize, out: &mut St
 
 fn emit_entry(key: &str, value: &Value, indent: usize, out: &mut String) {
     match value {
+        Value::Object(map) if map.is_empty() => {
+            // An empty object still declares its key.
+            push_line(out, indent, &format!("{}:", quote_scalar(key)));
+        }
         Value::Object(map) => {
             push_line(out, indent, &format!("{}:", quote_scalar(key)));
             emit_object(map, indent + 1, out);
@@ -60,8 +68,13 @@ fn emit_array(key: Option<&str>, items: &[Value], indent: usize, out: &mut Strin
     let prefix = key.map(quote_scalar).unwrap_or_default();
     let n = items.len();
 
+    // Empty array renders `key: []` (SPEC v4.1), not the legacy `key[0]:`.
     if items.is_empty() {
-        push_line(out, indent, &format!("{}[0]:", prefix));
+        if prefix.is_empty() {
+            push_line(out, indent, "[]");
+        } else {
+            push_line(out, indent, &format!("{}: []", prefix));
+        }
         return;
     }
 
@@ -70,7 +83,10 @@ fn emit_array(key: Option<&str>, items: &[Value], indent: usize, out: &mut Strin
         let header = format!("{}[{}]{{{}}}:", prefix, n, fields.join(","));
         push_line(out, indent, &header);
         for item in items {
-            let obj = item.as_object().expect("tabular_fields verified objects");
+            let obj = match item.as_object() {
+                Some(obj) => obj,
+                None => continue,
+            };
             let row: Vec<String> = fields
                 .iter()
                 .map(|f| scalar_to_toon(obj.get(f).unwrap_or(&Value::Null)))
@@ -87,17 +103,62 @@ fn emit_array(key: Option<&str>, items: &[Value], indent: usize, out: &mut Strin
         return;
     }
 
-    // Mixed / nested -> list fallback.
+    // Mixed / nested -> inline-dash list form.
     push_line(out, indent, &format!("{}[{}]:", prefix, n));
     for item in items {
-        match item {
-            Value::Object(map) => {
-                push_line(out, indent + 1, "-");
-                emit_object(map, indent + 2, out);
+        emit_list_item(item, indent + 1, out);
+    }
+}
+
+/// Emit one array element as a list item at `indent` (the dash column).
+///
+/// Scalars render as `- value`. Objects put their first field on the dash line
+/// (`- key: value`) with remaining fields aligned beneath it.
+fn emit_list_item(item: &Value, indent: usize, out: &mut String) {
+    match item {
+        Value::Object(map) if !map.is_empty() => {
+            let mut entries = map.iter();
+            if let Some((first_key, first_value)) = entries.next() {
+                emit_dash_entry(first_key, first_value, indent, out);
             }
-            Value::Array(inner) => emit_array(None, inner, indent + 1, out),
-            scalar => push_line(out, indent + 1, &format!("- {}", scalar_to_toon(scalar))),
+            for (key, value) in entries {
+                emit_entry(key, value, indent + 1, out);
+            }
         }
+        Value::Object(_) => {
+            // Empty object element.
+            push_line(out, indent, "-");
+        }
+        Value::Array(inner) => {
+            // Nested array element: dash header, then the array beneath it.
+            push_line(out, indent, "-");
+            emit_array(None, inner, indent + 1, out);
+        }
+        scalar => push_line(out, indent, &format!("- {}", scalar_to_toon(scalar))),
+    }
+}
+
+/// Emit an object's first field on a dash line: `- key: value`.
+fn emit_dash_entry(key: &str, value: &Value, indent: usize, out: &mut String) {
+    match value {
+        Value::Object(map) if map.is_empty() => {
+            push_line(out, indent, &format!("- {}:", quote_scalar(key)));
+        }
+        Value::Object(map) => {
+            push_line(out, indent, &format!("- {}:", quote_scalar(key)));
+            emit_object(map, indent + 2, out);
+        }
+        Value::Array(items) => {
+            // Array-valued first field: keep it simple — dash header, key array
+            // aligned beneath. (Not exercised by the fixtures; best-effort.)
+            push_line(out, indent, "-");
+            emit_array(Some(key), items, indent + 1, out);
+        }
+        scalar => push_line(
+            out,
+            indent,
+            &format!("- {}: {}", quote_scalar(key), scalar_to_toon(scalar)),
+        ),
     }
 }
 
@@ -135,10 +196,29 @@ fn scalar_to_toon(v: &Value) -> String {
     match v {
         Value::Null => "null".to_string(),
         Value::Bool(b) => b.to_string(),
-        Value::Number(n) => n.to_string(),
+        Value::Number(n) => number_to_toon(n),
         Value::String(s) => quote_scalar(s),
         // Not reachable through the scalar paths above.
         _ => String::new(),
+    }
+}
+
+/// Canonical TOON number: integers print bare; floats drop trailing zeros
+/// (`1.0` -> `1`, `1.5000` -> `1.5`), `-0` normalizes to `0`, and no exponent is
+/// used for `1e-6 <= |n| < 1e21` (Rust's `f64` Display never emits an exponent).
+fn number_to_toon(n: &Number) -> String {
+    if let Some(i) = n.as_i64() {
+        return i.to_string();
+    }
+    if let Some(u) = n.as_u64() {
+        return u.to_string();
+    }
+    match n.as_f64() {
+        Some(f) if f == 0.0 => "0".to_string(),
+        Some(f) => format!("{}", f),
+        // A Number that is neither an integer nor representable as f64 should not
+        // occur through serde_json; fall back to its own rendering.
+        None => n.to_string(),
     }
 }
 
@@ -153,9 +233,10 @@ fn quote_scalar(s: &str) -> String {
             '"' => q.push_str("\\\""),
             '\\' => q.push_str("\\\\"),
             '\n' => q.push_str("\\n"),
-            '\t' => q.push_str("\\t"),
             '\r' => q.push_str("\\r"),
-            _ => q.push(c),
+            '\t' => q.push_str("\\t"),
+            c if c.is_control() => q.push_str(&format!("\\u{:04x}", c as u32)),
+            c => q.push(c),
         }
     }
     q.push('"');
@@ -163,25 +244,81 @@ fn quote_scalar(s: &str) -> String {
 }
 
 fn needs_quoting(s: &str) -> bool {
+    // Empty.
     if s.is_empty() {
         return true;
     }
-    if s != s.trim() {
+    // Leading/trailing space or tab.
+    if starts_or_ends_with_ws(s) {
         return true;
     }
-    if s.chars().any(|c| {
-        matches!(
-            c,
-            ',' | ':' | '"' | '\\' | '{' | '}' | '[' | ']' | '\n' | '\t' | '\r'
-        )
-    }) {
-        return true;
-    }
-    // Disambiguate a string from a literal or number it would otherwise look like.
+    // Literal-looking strings.
     if matches!(s, "true" | "false" | "null") {
         return true;
     }
-    s.parse::<f64>().is_ok()
+    // Numeric-like (so a string never reads as a number).
+    if is_numeric_like(s) {
+        return true;
+    }
+    // Leading `-` or `#`.
+    if let Some(first) = s.chars().next() {
+        if first == '-' || first == '#' {
+            return true;
+        }
+    }
+    // Structural characters, the active delimiter, and control characters.
+    s.chars().any(|c| {
+        c == DELIMITER
+            || matches!(c, ':' | '"' | '\\' | '[' | ']' | '{' | '}')
+            || c.is_control()
+    })
+}
+
+fn starts_or_ends_with_ws(s: &str) -> bool {
+    let first = s.starts_with(' ') || s.starts_with('\t');
+    let last = s.ends_with(' ') || s.ends_with('\t');
+    first || last
+}
+
+/// Matches `/^[+-]?[0-9]+(?:\.[0-9]+)?(?:e[+-]?[0-9]+)?$/i` (SPEC v4.1).
+fn is_numeric_like(s: &str) -> bool {
+    let b = s.as_bytes();
+    let mut i = 0;
+
+    if i < b.len() && (b[i] == b'+' || b[i] == b'-') {
+        i += 1;
+    }
+    let int_start = i;
+    while i < b.len() && b[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i == int_start {
+        return false; // require at least one integer digit
+    }
+    if i < b.len() && b[i] == b'.' {
+        i += 1;
+        let frac_start = i;
+        while i < b.len() && b[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i == frac_start {
+            return false;
+        }
+    }
+    if i < b.len() && (b[i] == b'e' || b[i] == b'E') {
+        i += 1;
+        if i < b.len() && (b[i] == b'+' || b[i] == b'-') {
+            i += 1;
+        }
+        let exp_start = i;
+        while i < b.len() && b[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i == exp_start {
+            return false;
+        }
+    }
+    i == b.len()
 }
 
 fn push_line(out: &mut String, indent: usize, content: &str) {
@@ -198,7 +335,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn flat_object() {
+    fn flat_object_keeps_encounter_order() {
         let v = json!({"name": "review", "open": true});
         assert_eq!(encode(&v), "name: review\nopen: true");
     }
@@ -222,9 +359,15 @@ mod tests {
     }
 
     #[test]
-    fn empty_array() {
+    fn empty_array_renders_bracket_pair() {
         let v = json!({"tags": []});
-        assert_eq!(encode(&v), "tags[0]:");
+        assert_eq!(encode(&v), "tags: []");
+    }
+
+    #[test]
+    fn number_canonicalization() {
+        assert_eq!(encode(&json!({"a": 1.0, "b": 1.5000})), "a: 1\nb: 1.5");
+        assert_eq!(encode(&json!({"z": -0.0})), "z: 0");
     }
 
     #[test]
@@ -234,17 +377,26 @@ mod tests {
         assert_eq!(encode(&json!({"v": "12"})), "v: \"12\"");
         // A literal-looking string likewise.
         assert_eq!(encode(&json!({"v": "true"})), "v: \"true\"");
+        // A leading dash is ambiguous with the list form.
+        assert_eq!(encode(&json!({"v": "-x"})), "v: \"-x\"");
     }
 
     #[test]
-    fn mixed_array_falls_back_to_list() {
+    fn mixed_array_uses_inline_dash_list() {
+        let v = json!({"items": [1, {"a": 1}, "text"]});
+        assert_eq!(encode(&v), "items[3]:\n  - 1\n  - a: 1\n  - text");
+    }
+
+    #[test]
+    fn mixed_array_multi_field_object_item() {
         // Non-uniform (different key sets) -> list form, not a tabular block.
         let v = json!({"items": [{"a": 1}, {"a": 2, "b": 3}]});
-        assert_eq!(encode(&v), "items[2]:\n  -\n    a: 1\n  -\n    a: 2\n    b: 3");
+        assert_eq!(encode(&v), "items[2]:\n  - a: 1\n  - a: 2\n    b: 3");
     }
 
     #[test]
     fn root_scalar() {
         assert_eq!(encode(&json!("hello")), "hello");
+        assert_eq!(encode(&json!(42)), "42");
     }
 }

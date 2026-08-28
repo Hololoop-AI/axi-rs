@@ -12,6 +12,7 @@
 
 pub mod cli;
 pub mod error;
+pub mod hooks;
 pub mod toon;
 
 pub use cli::App;
