@@ -3,8 +3,7 @@
 //! `setup hooks` registers a session-start hook in each supported agent harness
 //! so the harness injects this CLI's slim home output at session start. We own
 //! it: it runs only on explicit `setup hooks`, is auditable, and is
-//! marker-managed. Nothing writes under `$HOME` implicitly (cadre-context
-//! decisions/2026-08-29-axi-rs-design-calls).
+//! marker-managed. Nothing writes under `$HOME` implicitly.
 //!
 //! Managed-ness is determined by [`MARKER`] appearing in a target file's
 //! CONTENT. The installer:

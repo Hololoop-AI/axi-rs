@@ -1,10 +1,13 @@
 [package]
 name = "axi-rs"
-version = "0.0.1"
+version = "0.1.0"
 description = "Rust implementation of the AXI agent-facing CLI protocol: command-first dispatch with TOON output."
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "../../README.md"
+keywords = ["cli", "agent", "toon", "llm", "axi"]
+categories = ["command-line-interface", "encoding"]
 
 [lib]
 name = "axi"

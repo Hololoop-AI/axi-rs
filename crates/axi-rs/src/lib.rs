@@ -7,8 +7,7 @@
 //!
 //! This crate is the protocol layer. It is a clean-room Rust reimplementation of
 //! the AXI convention (originally `axi-sdk-js` by Kun Chen); we keep the protocol
-//! and drop the JS dependency and its self-update command. See the design record
-//! in cadre-context (decisions/2026-08-29-*).
+//! and drop the JS dependency and its self-update command.
 
 pub mod cli;
 pub mod error;

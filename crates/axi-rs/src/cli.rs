@@ -9,9 +9,8 @@
 //! is a thin printer over it, so behavior can be asserted without spawning a
 //! subprocess.
 //!
-//! We deliberately reserve NO `update` self-update command (cadre-context
-//! decisions/2026-08-29-review-surface-rust-backend-keep-axi-protocol): the AXI
-//! JS framework shipped one for free; we do not.
+//! We deliberately reserve NO `update` self-update command: the AXI JS framework
+//! shipped one for free; we do not.
 
 use serde_json::Value;
 

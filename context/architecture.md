@@ -14,7 +14,7 @@ crate in this same workspace.
   port of Review Surface's node backend (layers 1–3). Depends on `axi-rs`.
 - **The web UI is out of scope for this repo.** Review Surface's layer 4 stays
   JavaScript (it reaches into the browser DOM); it is served/embedded, not
-  ported. See cadre-context questions/2026-08-27-surface-embedding-across-hosts.
+  ported. (Originally argued in the retired `cadre-context` repo (Hololoop-AI on GitHub; history only, not authority), questions/2026-08-27-surface-embedding-across-hosts.)
 
 ## Invariants (do not break without a decision)
 
@@ -30,5 +30,5 @@ crate in this same workspace.
 
 ## Why (single source)
 
-The cross-project rationale — why Rust, why keep AXI, why TOON everywhere — lives
-in cadre-context, not here. See [decisions.md](decisions.md) for the pointers.
+The cross-project rationale — why Rust, why keep AXI, why TOON everywhere — is
+summarised in [decisions.md](decisions.md).

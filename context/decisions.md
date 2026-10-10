@@ -1,8 +1,9 @@
 # Decisions
 
-The cross-project decisions that govern axi-rs live in **cadre-context**
-(Hololoop-AI), the knowledge vertex — not duplicated here. Cite those, not this
-file, for the "why."
+Decisions are made and locked on review pages; copies a codebase obeys live in
+the nearest `context/` folder. The entries below
+were first written in the retired `cadre-context` repo (Hololoop-AI on GitHub; history only, not authority); the summaries here are what
+still binds axi-rs.
 
 - `decisions/2026-08-29-review-surface-rust-backend-keep-axi-protocol.md` —
   backend goes Rust; keep the AXI protocol; drop `axi-sdk-js` and its

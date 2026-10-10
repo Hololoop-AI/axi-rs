@@ -11,27 +11,30 @@ The TOON output format is [Token-Oriented Object Notation](https://github.com/to
 
 ## Status
 
-Early scaffold. First slice landed:
+`0.1` — the protocol crate, pre-1.0 (the API may still change between minor
+versions):
 
-- `toon` — encode-only TOON (`serde_json::Value` → TOON string): objects, nested
-  objects, tabular uniform-object arrays, scalar arrays, list fallback.
+- `toon` — encode-only TOON (`serde_json::Value` → TOON string), conformant to
+  the TOON SPEC v4.1 core forms.
 - `error` — `AxiError` with actionable suggestions and stable per-class exit codes.
 - `cli` — `App`: command-first dispatch, home view, `--help`/`--version`, no
   reserved self-update command.
+- `hooks` — opt-in installer (`setup hooks`) that registers a session-start
+  hook for Claude Code, Codex and OpenCode; marker-managed and idempotent.
 
-Not yet built: the surface backend (axum server + state), full command surface,
-the opt-in session-start hook installer, and a TOON conformance pass against
-SPEC.md v4.1.
+## Use
+
+```toml
+[dependencies]
+axi-rs = "0.1"
+```
+
+The library is imported as `axi` (`use axi::cli::App;`).
 
 ## Design record
 
-Decisions live in `cadre-context` (Hololoop-AI), not here:
-
-- `decisions/2026-08-29-review-surface-rust-backend-keep-axi-protocol.md`
-- `decisions/2026-08-29-axi-rs-design-calls.md` — hooks, crate name, TOON
-  everywhere (no fallback), slim ambient blob.
-- `research/2026-08-29-toon-output-format.md`
-- `discussions/2026-08-29-axi-as-first-party-tool-standard.md`
+Design decisions that bind this crate are summarised in
+[`context/decisions.md`](context/decisions.md).
 
 ## Layout
 
@@ -40,6 +43,7 @@ crates/axi-rs/     the protocol crate (lib name: axi)
   src/toon.rs      encode-only TOON
   src/error.rs     AxiError + exit codes
   src/cli.rs       App / command-first dispatch
+  src/hooks.rs     opt-in session-start hook installer
 ```
 
 ## Develop

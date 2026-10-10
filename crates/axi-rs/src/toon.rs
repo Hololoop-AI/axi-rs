@@ -3,8 +3,8 @@
 //! AXI emits command results as TOON: the agent *reads* TOON, never writes it,
 //! so this crate needs only the encode direction (a JSON value -> a TOON string).
 //! The source is a `serde_json::Value` so the JSON model stays in memory for free
-//! (cadre-context decisions/2026-08-29-axi-rs-design-calls: TOON everywhere, no
-//! output fallback, but keeping the internal model is not a fallback).
+//! (TOON everywhere with no output fallback; keeping the internal model is not a
+//! fallback).
 //!
 //! Conformance target: SPEC v4.1. Covered here — encounter-order keys (requires
 //! `serde_json`'s `preserve_order` feature), nested objects, uniform-object
